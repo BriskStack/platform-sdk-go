@@ -20,6 +20,8 @@ jobs:
   publish:
     name: Create Git Tag for Go Module
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to create and push tags
 
     steps:
       - name: Checkout code
