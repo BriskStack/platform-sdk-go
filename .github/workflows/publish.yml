@@ -29,11 +29,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-
       - name: Get module version from go.mod
         id: module-version
         run: |
@@ -61,25 +56,28 @@ jobs:
           TAG="${{ steps.module-version.outputs.version }}"
 
           if [ -z "$TAG" ] || [ "$TAG" == "v0.0.0" ]; then
-            echo "exists=skip" >> $GITHUB_OUTPUT
-            echo "⚠️ No valid version found, skipping"
+            echo "❌ No valid version found"
+            echo "To publish, include version in commit message: 'Update Go SDK to v1.2.3'"
+            exit 1
           elif git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "⚠️ Tag $TAG already exists"
+            echo "❌ Tag $TAG already exists"
+            exit 1
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "✅ Tag $TAG does not exist yet"
+            echo "✅ Tag $TAG does not exist yet, proceeding with publish"
           fi
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
       - name: Verify Go code
-        if: steps.check-tag.outputs.exists == 'false'
         run: |
           go mod download
           go build ./...
           echo "✅ Go code compiles successfully"
 
       - name: Create and push tag
-        if: steps.check-tag.outputs.exists == 'false'
         run: |
           TAG="${{ steps.module-version.outputs.version }}"
 
@@ -92,7 +90,6 @@ jobs:
           echo "✅ Created and pushed tag $TAG"
 
       - name: Trigger pkg.go.dev indexing
-        if: steps.check-tag.outputs.exists == 'false'
         run: |
           # Request indexing by fetching the module
           MODULE_PATH=$(go list -m)
@@ -108,21 +105,11 @@ jobs:
 
       - name: Summary
         run: |
-          if [ "${{ steps.check-tag.outputs.exists }}" == "skip" ]; then
-            echo "⚠️ No valid version found in commit, skipped" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "To publish, include version in commit message: 'Update Go SDK to v1.2.3'" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ steps.check-tag.outputs.exists }}" == "true" ]; then
-            echo "⚠️ Version already published, skipped" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- Tag: ${{ steps.module-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "✅ Published Go module" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- Tag: ${{ steps.module-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-            echo "- Module: github.com/briskstack/platform-sdk-go" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "📦 Install: \`go get github.com/briskstack/platform-sdk-go@${{ steps.module-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "View at: https://pkg.go.dev/github.com/briskstack/platform-sdk-go@${{ steps.module-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "✅ Published Go module" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Tag: ${{ steps.module-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Module: github.com/briskstack/platform-sdk-go" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📦 Install: \`go get github.com/briskstack/platform-sdk-go@${{ steps.module-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View at: https://pkg.go.dev/github.com/briskstack/platform-sdk-go@${{ steps.module-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
