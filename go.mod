@@ -1,4 +1,4 @@
-module github.com/GIT_USER_ID/GIT_REPO_ID/briskstack
+module github.com/briskstack/platform-sdk-go
 
 go 1.23
 
