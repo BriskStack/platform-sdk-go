@@ -1,0 +1,125 @@
+# This workflow should be placed in the sdk-go repository at:
+# .github/workflows/publish.yml
+#
+# It automatically creates a git tag when changes are pushed to main
+# Go modules are published via git tags, no separate registry needed
+
+name: Publish Go Module
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - '**/*.go'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Create Git Tag for Go Module
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get module version from go.mod
+        id: module-version
+        run: |
+          # Extract version from the latest commit message if it follows semver pattern
+          # Or use a VERSION file, or extract from code
+
+          # Try to extract version from commit message
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          VERSION=$(echo "$COMMIT_MSG" | grep -oP 'v\d+\.\d+\.\d+' | head -1 || echo "")
+
+          if [ -z "$VERSION" ]; then
+            # If no version in commit, try to get latest tag and increment patch
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            # For now, just use the latest tag if it exists
+            VERSION=$LATEST_TAG
+            echo "⚠️ No version found in commit message, using latest tag: $VERSION"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version: $VERSION"
+
+      - name: Check if tag already exists
+        id: check-tag
+        run: |
+          TAG="${{ steps.module-version.outputs.version }}"
+
+          if [ -z "$TAG" ] || [ "$TAG" == "v0.0.0" ]; then
+            echo "exists=skip" >> $GITHUB_OUTPUT
+            echo "⚠️ No valid version found, skipping"
+          elif git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Tag $TAG already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "✅ Tag $TAG does not exist yet"
+          fi
+
+      - name: Run tests
+        if: steps.check-tag.outputs.exists == 'false'
+        run: |
+          go mod download
+          go test ./... -v
+
+      - name: Create and push tag
+        if: steps.check-tag.outputs.exists == 'false'
+        run: |
+          TAG="${{ steps.module-version.outputs.version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+          echo "✅ Created and pushed tag $TAG"
+
+      - name: Trigger pkg.go.dev indexing
+        if: steps.check-tag.outputs.exists == 'false'
+        run: |
+          # Request indexing by fetching the module
+          MODULE_PATH=$(go list -m)
+          VERSION="${{ steps.module-version.outputs.version }}"
+
+          echo "Requesting indexing for $MODULE_PATH@$VERSION"
+
+          # This will trigger pkg.go.dev to index the new version
+          curl -s "https://proxy.golang.org/$MODULE_PATH/@v/$VERSION.info" || true
+
+          echo "✅ Requested indexing at pkg.go.dev"
+          echo "It may take a few minutes to appear at https://pkg.go.dev/$MODULE_PATH@$VERSION"
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.check-tag.outputs.exists }}" == "skip" ]; then
+            echo "⚠️ No valid version found in commit, skipped" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "To publish, include version in commit message: 'Update Go SDK to v1.2.3'" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.check-tag.outputs.exists }}" == "true" ]; then
+            echo "⚠️ Version already published, skipped" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Tag: ${{ steps.module-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Published Go module" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Tag: ${{ steps.module-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Module: github.com/briskstack/sdk-go" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📦 Install: \`go get github.com/briskstack/sdk-go@${{ steps.module-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "View at: https://pkg.go.dev/github.com/briskstack/sdk-go@${{ steps.module-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          fi

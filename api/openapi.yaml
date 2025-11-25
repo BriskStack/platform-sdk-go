@@ -1,0 +1,638 @@
+openapi: 3.1.0
+info:
+  description: Unified API for all BriskStack platform services
+  title: BriskStack Platform API
+  version: 1.0.0
+servers:
+- description: Production
+  url: https://api.briskstack.com/ai-gateway/v1
+- description: Staging
+  url: https://api-staging.briskstack.com/ai-gateway/v1
+- description: Development
+  url: https://api-dev.briskstack.com/ai-gateway/v1
+- description: Local development
+  url: http://localhost:8787/ai-gateway/v1
+paths:
+  /ai-gateway/v1/healthz:
+    get:
+      description: Returns service health status
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGateway_HealthzResponse"
+          description: Service is healthy
+      summary: Health check endpoint
+      tags:
+      - AiGateway::Health
+  /ai-gateway/v1/chat/completions:
+    post:
+      description: Creates a chat completion using AI providers via Cloudflare AI
+        Gateway. Supports BYOK (Bring Your Own Key) - pass your AI provider API key
+        in the X-API-Key header.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiGateway_ChatCompletionRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGateway_ChatCompletionResponse"
+          description: Chat completion successful
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGateway_ErrorResponse"
+          description: Bad request - invalid parameters
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGateway_ErrorResponse"
+          description: Unauthorized - missing or invalid OpenAI API key
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGateway_ErrorResponse"
+          description: Validation error - request body validation failed
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGateway_ErrorResponse"
+          description: Internal server error
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGateway_ErrorResponse"
+          description: Bad gateway - upstream API error
+      security:
+      - bearerAuth: []
+        apiKeyAuth: []
+      summary: Create chat completion
+      tags:
+      - AiGateway::Chat
+  /hello-world/v1/healthz:
+    get:
+      description: Returns service health status
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HelloWorld_HealthzResponse"
+          description: Service is healthy
+      summary: Health check endpoint
+      tags:
+      - HelloWorld::Health
+  /hello-world/v1/:
+    get:
+      description: Returns a friendly hello message with service information
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HelloWorld_HelloResponse"
+          description: Success
+      summary: Hello endpoint
+      tags:
+      - HelloWorld::Core
+  /hello-world/v1/messages:
+    post:
+      description: Creates a new message
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HelloWorld_CreateMessageRequest"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HelloWorld_CreateMessageResponse"
+          description: Message created
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HelloWorld_ErrorResponse"
+          description: Validation error
+      summary: Create message
+      tags:
+      - HelloWorld::Messages
+  /hello-world/v1/protected:
+    get:
+      description: Demonstrates authentication - requires valid user JWT from Supabase
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HelloWorld_ProtectedResponse"
+          description: Success - authenticated user
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HelloWorld_ErrorResponse"
+          description: Unauthorized - no/invalid token
+      security:
+      - bearerAuth: []
+      summary: Protected endpoint (requires authentication)
+      tags:
+      - HelloWorld::Auth
+components:
+  parameters: {}
+  schemas:
+    AiGateway_HealthzResponse:
+      example:
+        environment: production
+        service: hello-world
+        version: 1.0.0
+        status: ok
+        timestamp: 2025-01-15T12:00:00Z
+        uptime: 3600
+      properties:
+        status:
+          description: Health status indicator
+          enum:
+          - ok
+          example: ok
+          type: string
+        service:
+          description: Service name
+          example: hello-world
+          type: string
+        environment:
+          description: Deployment environment
+          example: production
+          type: string
+        version:
+          description: Service version
+          example: 1.0.0
+          type: string
+        timestamp:
+          description: Current server time in ISO 8601 format
+          example: 2025-01-15T12:00:00Z
+          format: date-time
+          type: string
+        uptime:
+          description: Service uptime in seconds (if available)
+          example: 3600
+          type: number
+      required:
+      - environment
+      - service
+      - status
+      - timestamp
+      - version
+    AiGateway_ChatMessage:
+      example:
+        role: system
+        tool_call_id: tool_call_id
+        name: name
+        tool_calls:
+        - ""
+        - ""
+        content: content
+      properties:
+        role:
+          enum:
+          - system
+          - user
+          - assistant
+          - tool
+          - function
+          type: string
+        content:
+          nullable: true
+          type: string
+        name:
+          type: string
+        tool_calls:
+          items:
+            nullable: true
+          type: array
+        tool_call_id:
+          type: string
+      required:
+      - role
+    AiGateway_ChatCompletionResponse:
+      example:
+        created: 0
+        usage:
+          completion_tokens: 5
+          prompt_tokens: 1
+          total_tokens: 5
+        model: model
+        id: id
+        choices:
+        - finish_reason: finish_reason
+          index: 6
+          message:
+            role: system
+            tool_call_id: tool_call_id
+            name: name
+            tool_calls:
+            - ""
+            - ""
+            content: content
+          logprobs: ""
+        - finish_reason: finish_reason
+          index: 6
+          message:
+            role: system
+            tool_call_id: tool_call_id
+            name: name
+            tool_calls:
+            - ""
+            - ""
+            content: content
+          logprobs: ""
+        system_fingerprint: system_fingerprint
+        object: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+        created:
+          type: integer
+        model:
+          type: string
+        choices:
+          items:
+            $ref: "#/components/schemas/AiGateway_ChatCompletionResponse_choices_inner"
+          type: array
+        usage:
+          $ref: "#/components/schemas/AiGateway_ChatCompletionResponse_usage"
+        system_fingerprint:
+          type: string
+      required:
+      - choices
+      - created
+      - id
+      - model
+      - object
+    AiGateway_ErrorResponse:
+      example:
+        error:
+          code: VALIDATION_ERROR
+          details:
+            key: ""
+          message: Invalid request
+      properties:
+        error:
+          $ref: "#/components/schemas/AiGateway_ErrorResponse_error"
+      required:
+      - error
+    AiGateway_ChatCompletionRequest:
+      properties:
+        model:
+          description: "Model to use (e.g., \"openai/gpt-4\", \"anthropic/claude-3-5-sonnet-20241022\"\
+            )"
+          example: openai/gpt-4
+          type: string
+        messages:
+          description: Array of messages in the conversation
+          items:
+            $ref: "#/components/schemas/AiGateway_ChatMessage"
+          minItems: 1
+          type: array
+        temperature:
+          description: Sampling temperature (0-2)
+          example: 0.7
+          maximum: 2
+          minimum: 0
+          type: number
+        top_p:
+          description: Nucleus sampling parameter
+          example: 1
+          maximum: 1
+          minimum: 0
+          type: number
+        "n":
+          description: Number of completions to generate
+          example: 1
+          minimum: 0
+          type: integer
+        stream:
+          description: Whether to stream responses
+          example: false
+          type: boolean
+        stop:
+          $ref: "#/components/schemas/AiGateway_ChatCompletionRequest_stop"
+        max_tokens:
+          description: Maximum tokens to generate
+          example: 1000
+          minimum: 0
+          type: integer
+        presence_penalty:
+          description: Presence penalty (-2 to 2)
+          example: 0
+          maximum: 2
+          minimum: -2
+          type: number
+        frequency_penalty:
+          description: Frequency penalty (-2 to 2)
+          example: 0
+          maximum: 2
+          minimum: -2
+          type: number
+        logit_bias:
+          additionalProperties:
+            type: number
+          description: Token logit bias
+        user:
+          description: Unique user identifier
+          type: string
+        tools:
+          description: Tools available for the model to call
+          items:
+            nullable: true
+          type: array
+        tool_choice:
+          nullable: true
+          type: string
+        response_format:
+          $ref: "#/components/schemas/AiGateway_ChatCompletionRequest_response_format"
+        seed:
+          description: Random seed for deterministic sampling
+          type: integer
+      required:
+      - messages
+      - model
+    HelloWorld_HealthzResponse:
+      example:
+        environment: production
+        service: hello-world
+        version: 1.0.0
+        status: ok
+        timestamp: 2025-01-15T12:00:00Z
+        uptime: 3600
+      properties:
+        status:
+          description: Health status indicator
+          enum:
+          - ok
+          example: ok
+          type: string
+        service:
+          description: Service name
+          example: hello-world
+          type: string
+        environment:
+          description: Deployment environment
+          example: production
+          type: string
+        version:
+          description: Service version
+          example: 1.0.0
+          type: string
+        timestamp:
+          description: Current server time in ISO 8601 format
+          example: 2025-01-15T12:00:00Z
+          format: date-time
+          type: string
+        uptime:
+          description: Service uptime in seconds (if available)
+          example: 3600
+          type: number
+      required:
+      - environment
+      - service
+      - status
+      - timestamp
+      - version
+    HelloWorld_HelloResponse:
+      example:
+        environment: development
+        service: hello-world
+        message: Hello from BriskStack Platform!
+        version: 0.1.0
+        timestamp: 2025-01-15T12:00:00Z
+      properties:
+        message:
+          description: Greeting message
+          example: Hello from BriskStack Platform!
+          type: string
+        service:
+          description: Service name
+          example: hello-world
+          type: string
+        environment:
+          description: Environment (development/staging/production)
+          example: development
+          type: string
+        timestamp:
+          description: ISO 8601 timestamp
+          example: 2025-01-15T12:00:00Z
+          format: date-time
+          type: string
+        version:
+          description: Service version
+          example: 0.1.0
+          type: string
+      required:
+      - environment
+      - message
+      - service
+      - timestamp
+      - version
+    HelloWorld_CreateMessageResponse:
+      example:
+        createdAt: 2025-01-15T12:00:00Z
+        id: 123e4567-e89b-12d3-a456-426614174000
+        message: Hello World
+        priority: medium
+      properties:
+        id:
+          description: Message ID
+          example: 123e4567-e89b-12d3-a456-426614174000
+          format: uuid
+          type: string
+        message:
+          description: Message content
+          example: Hello World
+          type: string
+        priority:
+          description: Message priority
+          example: medium
+          type: string
+        createdAt:
+          description: Creation timestamp
+          example: 2025-01-15T12:00:00Z
+          format: date-time
+          type: string
+      required:
+      - createdAt
+      - id
+      - message
+      - priority
+    HelloWorld_ErrorResponse:
+      example:
+        error:
+          code: VALIDATION_ERROR
+          details:
+            key: ""
+          message: Invalid request
+      properties:
+        error:
+          $ref: "#/components/schemas/AiGateway_ErrorResponse_error"
+      required:
+      - error
+    HelloWorld_CreateMessageRequest:
+      properties:
+        message:
+          description: Message content (1-500 characters)
+          example: Hello World
+          maxLength: 500
+          minLength: 1
+          type: string
+        priority:
+          description: Message priority level
+          enum:
+          - low
+          - medium
+          - high
+          example: medium
+          type: string
+      required:
+      - message
+    HelloWorld_ProtectedResponse:
+      example:
+        roles:
+        - authenticated
+        message: Access granted! You are authenticated.
+        userId: user-123
+        timestamp: 2025-01-15T12:00:00Z
+      properties:
+        message:
+          description: Success message
+          example: Access granted! You are authenticated.
+          type: string
+        userId:
+          description: Authenticated user or service ID (from auth.sub)
+          example: user-123
+          type: string
+        roles:
+          description: User roles or service scopes (from auth.roles)
+          example:
+          - authenticated
+          items:
+            type: string
+          type: array
+        timestamp:
+          description: ISO 8601 timestamp
+          example: 2025-01-15T12:00:00Z
+          format: date-time
+          type: string
+      required:
+      - message
+      - roles
+      - timestamp
+      - userId
+    AiGateway_ChatCompletionResponse_choices_inner:
+      example:
+        finish_reason: finish_reason
+        index: 6
+        message:
+          role: system
+          tool_call_id: tool_call_id
+          name: name
+          tool_calls:
+          - ""
+          - ""
+          content: content
+        logprobs: ""
+      properties:
+        index:
+          type: integer
+        message:
+          $ref: "#/components/schemas/AiGateway_ChatMessage"
+        finish_reason:
+          type: string
+          nullable: true
+        logprobs:
+          nullable: true
+      required:
+      - finish_reason
+      - index
+      - message
+    AiGateway_ChatCompletionResponse_usage:
+      example:
+        completion_tokens: 5
+        prompt_tokens: 1
+        total_tokens: 5
+      properties:
+        prompt_tokens:
+          type: integer
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+      required:
+      - completion_tokens
+      - prompt_tokens
+      - total_tokens
+    AiGateway_ErrorResponse_error:
+      example:
+        code: VALIDATION_ERROR
+        details:
+          key: ""
+        message: Invalid request
+      properties:
+        code:
+          description: Error code
+          example: VALIDATION_ERROR
+          type: string
+        message:
+          description: Error message
+          example: Invalid request
+          type: string
+        details:
+          additionalProperties:
+            nullable: true
+          description: Additional error details
+      required:
+      - code
+      - message
+    AiGateway_ChatCompletionRequest_stop:
+      anyOf:
+      - type: string
+      - items:
+          type: string
+        type: array
+      description: Stop sequences
+    AiGateway_ChatCompletionRequest_response_format:
+      description: Response format (text or json_object)
+      properties:
+        type:
+          enum:
+          - text
+          - json_object
+          type: string
+      required:
+      - type
+  securitySchemes:
+    bearerAuth:
+      bearerFormat: JWT
+      description: JWT token from Supabase authentication. Used for user authentication
+        across all BriskStack services.
+      scheme: bearer
+      type: http
+    apiKeyAuth:
+      description: "API key authentication. Used for BYOK (Bring Your Own Key) scenarios,\
+        \ such as passing your own OpenAI/Anthropic API key to AI Gateway."
+      in: header
+      name: X-API-Key
+      type: apiKey
